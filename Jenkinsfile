@@ -3,6 +3,11 @@ pipeline {
         label 'maven-docker'
     }
 
+    options {
+        // Stop Jenkins from running an automatic checkout before our stages execute
+        skipDefaultCheckout()
+    }
+
     stages {
         stage('Install Git Dynamically') {
             steps {
