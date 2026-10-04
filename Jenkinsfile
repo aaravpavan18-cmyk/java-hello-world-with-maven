@@ -31,21 +31,41 @@ pipeline {
 
         stage('Execute Unit Tests') {
             steps {
-                sh 'mvn test'
+                sh 'mvn clean test'
             }
         }
 
+        
+
+       
+        stage('SonarQube Static Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') { 
+                    // Tell SonarQube exactly where to find the JaCoCo XML report
+                    sh '''
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                        -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                    '''
+                }
+            }
+        }
+
+        stage('Publish Coverage to Jenkins') {
+            steps {
+                // This displays an interactive Code Coverage report chart directly on the Jenkins Build UI
+                // Note: Requires the "JaCoCo Plugin" to be installed on your Jenkins server
+                jacoco(
+                    execPattern: 'target/*.exec',
+                    classPattern: 'target/classes',
+                    sourcePattern: 'src/main/java',
+                    exclusionPattern: '**/*Test*.class'
+                )
+            }
+        }
+        
         stage('Package Artifact') {
             steps {
                 sh 'mvn package -DskipTests'
-            }
-        }
-
-        stage('SonarQube Static Analysis') {
-            steps {
-                withSonarQubeEnv('Sonarqube') { 
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
-                }
             }
         }
 
