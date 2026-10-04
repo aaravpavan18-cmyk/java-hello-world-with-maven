@@ -23,11 +23,11 @@ pipeline {
             }
         }
 
-        //stage('Maven Compile') {
-            //steps {
-                //sh 'mvn clean compile'
-            //}
-        //}
+        stage('Maven Compile') {
+            steps {
+                sh 'mvn clean compile'
+            }
+        }
 
        
 
