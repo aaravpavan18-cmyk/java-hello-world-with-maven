@@ -29,11 +29,7 @@ pipeline {
             }
         }
 
-        stage('Execute Unit Tests') {
-            steps {
-                sh 'mvn clean test'
-            }
-        }
+       
 
         
 
@@ -62,7 +58,13 @@ pipeline {
                 )
             }
         }
-        
+
+         stage('Execute Unit Tests') {
+            steps {
+                sh 'mvn clean test'
+            }
+        }
+
         stage('Package Artifact') {
             steps {
                 sh 'mvn package -DskipTests'
