@@ -3,41 +3,58 @@ pipeline {
         label 'maven-docker'
     }
 
-    options {
-        // Stop Jenkins from running an automatic checkout before our stages execute
-        skipDefaultCheckout()
-    }
+    //options {
+        //skipDefaultCheckout()
+    //}
 
     stages {
-        stage('Install Git Dynamically') {
+
+        stage('Checkout Source') {
             steps {
-                // Determine container type and install git before SCM checkout runs
-                sh '''
-                    if [ -f /etc/alpine-release ]; then
-                        echo "Detected Alpine Linux. Installing git..."
-                        apk add --no-cache git
-                    elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
-                        echo "Detected Debian/Ubuntu Linux. Installing git..."
-                        apt-get update && apt-get install -y git
-                    elif [ -f /etc/redhat-release ]; then
-                        echo "Detected RHEL/CentOS/Fedora Linux. Installing git..."
-                        yum install -y git
-                    else
-                        echo "Unknown Linux distribution. Attempting generic install..."
-                        apk add --no-cache git || apt-get update && apt-get install -y git || yum install -y git
-                    fi
-                    git --version
-                '''
+                checkout([
+                    $class: 'GitSCM', 
+                    branches: [[name: '*/master']], 
+                    extensions: [], 
+                    userRemoteConfigs: [[
+                        credentialsId: 'gitpat', 
+                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
+                    ]]
+                ])
             }
         }
-        stage('checkout') {
-            steps{
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[credentialsId: 'gitpat', url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git']]])
+
+        stage('Maven Compile') {
+            steps {
+                sh 'mvn clean compile'
             }
         }
-        stage('build') {
-            steps{
-               sh 'mvn package'
+
+        stage('Execute Unit Tests') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Package Artifact') {
+            steps {
+                sh 'mvn package -DskipTests'
+            }
+        }
+
+        stage('SonarQube Static Analysis') {
+            steps {
+                withSonarQubeEnv('Sonarqube') { 
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
+                }
+            }
+        }
+
+        stage('Archive Local Copy') {
+            steps {
+                // Copies any jar or war generated in the target directory back to the local Jenkins controller storage
+                archiveArtifacts artifacts: 'target/*.?ar', allowEmptyArchive: false, fingerprint: true
+                
+                echo "Artifact successfully copied out of the container and saved on the Jenkins host!"
             }
         }
     }
