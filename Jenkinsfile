@@ -29,6 +29,12 @@ pipeline {
             }
         }
 
+          stage('Execute Unit Tests') {
+            steps {
+                sh 'mvn clean test'
+            }
+        }
+
        
 
         
@@ -36,7 +42,7 @@ pipeline {
        
         stage('SonarQube Static Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') { 
+                withSonarQubeEnv('Sonarqube') { 
                     // Tell SonarQube exactly where to find the JaCoCo XML report
                     sh '''
                         mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
@@ -59,11 +65,7 @@ pipeline {
             }
         }
 
-         stage('Execute Unit Tests') {
-            steps {
-                sh 'mvn clean test'
-            }
-        }
+       
 
         stage('Package Artifact') {
             steps {
