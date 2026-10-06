@@ -44,26 +44,25 @@ pipeline {
             steps {
                 withSonarQubeEnv('Sonarqube') { 
                     // Tell SonarQube exactly where to find the JaCoCo XML report
-                    sh '''
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                        -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-                    '''
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
+                        
+                    
                 }
             }
         }
 
-        stage('Publish Coverage to Jenkins') {
-            steps {
+        //stage('Publish Coverage to Jenkins') {
+            //steps {
                 // This displays an interactive Code Coverage report chart directly on the Jenkins Build UI
                 // Note: Requires the "JaCoCo Plugin" to be installed on your Jenkins server
                 jacoco(
-                    execPattern: 'target/*.exec',
-                    classPattern: 'target/classes',
-                    sourcePattern: 'src/main/java',
-                    exclusionPattern: '**/*Test*.class'
-                )
-            }
-        }
+                    //execPattern: 'target/*.exec',
+                    //classPattern: 'target/classes',
+                    //sourcePattern: 'src/main/java',
+                    //exclusionPattern: '**/*Test*.class'
+                //)
+            //}
+        //}
 
        
 
@@ -81,5 +80,13 @@ pipeline {
                 echo "Artifact successfully copied out of the container and saved on the Jenkins host!"
             }
         }
+
+        stage('Build & Tag Docker Image') {
+            steps {
+                // This builds your Docker image using the Dockerfile we created earlier
+                sh 'docker build -t hello-maven-app:latest .'
+                echo "Docker image built successfully from the generated JAR file!"
+            }
+        }            
     }
 }
