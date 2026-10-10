@@ -38,9 +38,9 @@ pipeline {
         stage('Publish to Nexus via Plugin') {
             steps {
                 nexusArtifactUploader(
-                    nexusVersion: 'nexus2',
+                    nexusVersion: 'nexus3',
                     protocol: 'http',
-                    nexusUrl: '10.253.41.229:8081/repository',
+                    nexusUrl: '10.253.41.229:8081',
                     repository: 'maven-builds',
                     credentialsId: 'nexus',
                     groupId: 'org.springframework',
