@@ -19,7 +19,7 @@ pipeline {
                     def targetSelector
                     
                     if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
-                        targetSelector = lastSuccessfulBuild()
+                        targetSelector = lastSuccessful()
                     } else {
                         targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
                     }
