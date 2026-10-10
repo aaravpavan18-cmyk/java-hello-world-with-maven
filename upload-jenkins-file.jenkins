@@ -10,6 +10,17 @@ pipeline {
     }
 
     stages {
+        stage('Fetch Artifact') {
+            steps {
+                // Copy the specific file from the upstream build job
+                copyArtifacts(
+                    projectName: 'build-java-maven',
+                    selector: specific(params.UPSTREAM_BUILD_NUMBER),
+                    filter: 'target/*.jar',
+                    fingerprintArtifacts: true
+                )
+            }
+        }
         stage('Publish to Nexus via Plugin') {
             steps {
                 nexusArtifactUploader(
