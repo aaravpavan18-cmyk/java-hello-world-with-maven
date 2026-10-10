@@ -4,13 +4,10 @@ pipeline {
     }
 
     environment {
-        // Securely bind your Nexus credentials from the Jenkins dashboard
-        // 'nexus-credentials-id' must match the exact ID you created in the Jenkins UI
         NEXUS_CREDS = credentials('nexus')
     }
 
     parameters {
-        // You manually type the build number here during a failure recovery run
         string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
     }
 
@@ -18,22 +15,26 @@ pipeline {
         stage('Fetch Artifact') {
             steps {
                 script {
-                    // Determine which selector to use based on user input
-                    def targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
+                    // 1. Declare the variable outside the conditional block
+                    def targetSelector
                     
                     if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
                         targetSelector = lastSuccessfulBuild()
+                    } else {
+                        targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
                     }
+                    
+                    // 2. Run the copy step INSIDE the script block where targetSelector is visible
+                    copyArtifacts(
+                        projectName: 'build-java-maven',
+                        selector: targetSelector,
+                        filter: 'target/*.jar',
+                        fingerprintArtifacts: true
+                    )
                 }    
-                // Copy the specific file from the upstream build job
-                copyArtifacts(
-                    projectName: 'build-java-maven',
-                    selector: targetSelector,
-                    filter: 'target/*.jar',
-                    fingerprintArtifacts: true
-                )
             }
         }
+        
         stage('Publish to Nexus via Plugin') {
             steps {
                 nexusArtifactUploader(
@@ -56,6 +57,5 @@ pipeline {
                 echo "Artifact successfully published to Nexus via Jenkins Plugin!"
             }
         }
-
     }
 }
