@@ -1,0 +1,37 @@
+pipeline {
+    agent {
+        label 'maven-docker'
+    }
+
+    environment {
+        // Securely bind your Nexus credentials from the Jenkins dashboard
+        // 'nexus-credentials-id' must match the exact ID you created in the Jenkins UI
+        NEXUS_CREDS = credentials('nexus')
+    }
+
+    stages {
+        stage('Publish to Nexus via Plugin') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus2',
+                    protocol: 'http',
+                    nexusUrl: '10.253.41.229:8081/repository',
+                    repository: 'maven-builds',
+                    credentialsId: 'nexus',
+                    groupId: 'org.springframework',
+                    version: '0.2.0',
+                    artifacts: [
+                        [
+                            artifactId: 'jb-hello-world-maven',
+                            classifier: '',
+                            file: 'target/jb-hello-world-maven-0.2.0.jar',
+                            type: 'jar'
+                        ]
+                    ]
+                )
+                echo "Artifact successfully published to Nexus via Jenkins Plugin!"
+            }
+        }
+
+    }
+}
