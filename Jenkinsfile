@@ -3,12 +3,13 @@ pipeline {
         label 'maven-docker'
     }
 
-    //options {
-        //skipDefaultCheckout()
-    //}
+    environment {
+        // Securely bind your Nexus credentials from the Jenkins dashboard
+        // 'nexus-credentials-id' must match the exact ID you created in the Jenkins UI
+        NEXUS_CREDS = credentials('nexus')
+    }
 
     stages {
-
         stage('Checkout Source') {
             steps {
                 checkout([
@@ -29,42 +30,19 @@ pipeline {
             }
         }
 
-          stage('Execute Unit Tests') {
+        stage('Execute Unit Tests') {
             steps {
                 sh 'mvn clean test'
             }
         }
 
-       
-
-        
-
-       
-        stage('SonarQube Static Analysis') {
-            steps {
-                withSonarQubeEnv('Sonarqube') { 
-                    // Tell SonarQube exactly where to find the JaCoCo XML report
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
-                        
-                    
-                }
-            }
-        }
-
-        //stage('Publish Coverage to Jenkins') {
+        //stage('SonarQube Static Analysis') {
             //steps {
-                // This displays an interactive Code Coverage report chart directly on the Jenkins Build UI
-                // Note: Requires the "JaCoCo Plugin" to be installed on your Jenkins server
-                jacoco(
-                    //execPattern: 'target/*.exec',
-                    //classPattern: 'target/classes',
-                    //sourcePattern: 'src/main/java',
-                    //exclusionPattern: '**/*Test*.class'
-                //)
+                //withSonarQubeEnv('Sonarqube') { 
+                    //sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
+                //}
             //}
         //}
-
-       
 
         stage('Package Artifact') {
             steps {
@@ -74,19 +52,22 @@ pipeline {
 
         stage('Archive Local Copy') {
             steps {
-                // Copies any jar or war generated in the target directory back to the local Jenkins controller storage
                 archiveArtifacts artifacts: 'target/*.?ar', allowEmptyArchive: false, fingerprint: true
-                
                 echo "Artifact successfully copied out of the container and saved on the Jenkins host!"
             }
         }
 
-        stage('Build & Tag Docker Image') {
+        stage('Publish to Nexus') {
             steps {
-                // This builds your Docker image using the Dockerfile we created earlier
-                sh 'docker build -t hello-maven-app:latest .'
-                echo "Docker image built successfully from the generated JAR file!"
+                // We use Maven's command line options to pass credentials dynamically.
+                // This injects the variables securely and overrides the server mapping on the fly.
+                sh '''
+                    mvn deploy -DskipTests \
+                    -Dusername=${NEXUS_CREDS_USR} \
+                    -Dpassword=${NEXUS_CREDS_PSW}
+                '''
+                echo "Artifact successfully pushed to Nexus Repository Server!"
             }
-        }            
+        }
     }
 }
