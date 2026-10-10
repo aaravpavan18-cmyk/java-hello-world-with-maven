@@ -57,17 +57,28 @@ pipeline {
             }
         }
 
-        stage('Publish to Nexus') {
+        stage('Publish to Nexus via Plugin') {
             steps {
-                // We use Maven's command line options to pass credentials dynamically.
-                // This injects the variables securely and overrides the server mapping on the fly.
-                sh '''
-                    mvn deploy -DskipTests \
-                    -Dusername=${NEXUS_CREDS_USR} \
-                    -Dpassword=${NEXUS_CREDS_PSW}
-                '''
-                echo "Artifact successfully pushed to Nexus Repository Server!"
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus2',
+                    protocol: 'http',
+                    nexusUrl: '10.253.41.229:8081/repository',
+                    repository: 'maven-builds',
+                    credentialsId: 'nexus',
+                    groupId: 'org.springframework',
+                    version: '0.2.0',
+                    artifacts: [
+                        [
+                            artifactId: 'jb-hello-world-maven',
+                            classifier: '',
+                            file: 'target/jb-hello-world-maven-0.2.0.jar',
+                            type: 'jar'
+                        ]
+                    ]
+                )
+                echo "Artifact successfully published to Nexus via Jenkins Plugin!"
             }
         }
+
     }
 }
