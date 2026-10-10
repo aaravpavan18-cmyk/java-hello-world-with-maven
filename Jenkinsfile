@@ -3,6 +3,12 @@ pipeline {
         label 'maven-docker'
     }
 
+    // 🌟 ADD THIS BLOCK TO YOUR UPSTREAM BUILD JOB 🌟
+    options {
+        // Replace 'upload-nexus-job' with the EXACT name of your current upload job
+        copyArtifactPermission('upload-maven-artifacts') 
+    }
+
     environment {
         // Securely bind your Nexus credentials from the Jenkins dashboard
         // 'nexus-credentials-id' must match the exact ID you created in the Jenkins UI
