@@ -57,26 +57,12 @@ pipeline {
             }
         }
 
-        stage('Publish to Nexus via Plugin') {
+        stage('Trigger Upload') {
             steps {
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus2',
-                    protocol: 'http',
-                    nexusUrl: '10.253.41.229:8081/repository',
-                    repository: 'maven-builds',
-                    credentialsId: 'nexus',
-                    groupId: 'org.springframework',
-                    version: '0.2.0',
-                    artifacts: [
-                        [
-                            artifactId: 'jb-hello-world-maven',
-                            classifier: '',
-                            file: 'target/jb-hello-world-maven-0.2.0.jar',
-                            type: 'jar'
-                        ]
-                    ]
-                )
-                echo "Artifact successfully published to Nexus via Jenkins Plugin!"
+                // Trigger the downstream job and pass the current build number
+                build job: 'upload-maven-artifacts', parameters: [
+                    string(name: 'UPSTREAM_BUILD_NUMBER', value: "${BUILD_NUMBER}")
+                ]
             }
         }
 
