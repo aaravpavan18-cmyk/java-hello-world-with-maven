@@ -15,7 +15,6 @@ pipeline {
         stage('Fetch Artifact') {
             steps {
                 script {
-                    // 1. Declare the variable outside the conditional block
                     def targetSelector
                     
                     if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
@@ -24,7 +23,7 @@ pipeline {
                         targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
                     }
                     
-                    // 2. Run the copy step INSIDE the script block where targetSelector is visible
+                    // Copies the archived JAR from the upstream workspace
                     copyArtifacts(
                         projectName: 'build-java-maven',
                         selector: targetSelector,
@@ -37,23 +36,39 @@ pipeline {
         
         stage('Publish to Nexus via Plugin') {
             steps {
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: '10.253.41.229:8081',
-                    repository: 'maven-releases',
-                    credentialsId: 'nexus',
-                    groupId: 'org.springframework',
-                    version: '0.2.0',
-                    artifacts: [
-                        [
-                            artifactId: 'jb-hello-world-maven',
-                            classifier: '',
-                            file: 'target/jb-hello-world-maven-0.2.0.jar',
-                            type: 'jar'
+                script {
+                    // 1. Locate the exact copied JAR file in the target directory dynamically using a wildcard match
+                    def jarFiles = findFiles(glob: 'target/*.jar')
+                    
+                    if (jarFiles.length == 0) {
+                        error "No JAR file found in target directory! Verify the upstream job archived it successfully."
+                    }
+                    
+                    // Pull the exact filename out of the array context path (e.g. 'target/jb-hello-world-maven-23.jar')
+                    def targetFilePath = jarFiles[0].path
+                    
+                    // 2. Resolve the dynamic version tracking number for Nexus indexing metadata
+                    def dynamicVersion = (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
+                    
+                    // 3. Execute authorized push directly to the hosted production repository layout
+                    nexusArtifactUploader(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: '10.253.41.229:8081',
+                        repository: 'maven-releases', // Target hosted repository group block bypassed
+                        credentialsId: 'nexus',
+                        groupId: 'org.springframework',
+                        version: "${dynamicVersion}", // String interpolation active via double quotes
+                        artifacts: [
+                            [
+                                artifactId: 'jb-hello-world-maven',
+                                classifier: '',
+                                file: "${targetFilePath}", // Dynamically points to the resolved file location
+                                type: 'jar'
+                            ]
                         ]
-                    ]
-                )
+                    )
+                }
                 echo "Artifact successfully published to Nexus via Jenkins Plugin!"
             }
         }

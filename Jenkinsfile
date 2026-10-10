@@ -53,12 +53,15 @@ pipeline {
         stage('Package Artifact') {
             steps {
                 sh 'mvn package -DskipTests'
+                sh "mv target/jb-hello-world-maven-0.2.0.jar target/jb-hello-world-maven-${env.BUILD_NUMBER}.jar"
+                //sh 'mvn clean package -Dmaven.repo.local=.m2/repository'
             }
         }
 
         stage('Archive Local Copy') {
             steps {
-                archiveArtifacts artifacts: 'target/*.?ar', allowEmptyArchive: false, fingerprint: true
+                //archiveArtifacts artifacts: 'target/*.?ar', allowEmptyArchive: false, fingerprint: true
+                archiveArtifacts artifacts: "target/jb-hello-world-maven-${env.BUILD_NUMBER}.jar", allowEmptyArchive: false
                 echo "Artifact successfully copied out of the container and saved on the Jenkins host!"
             }
         }
