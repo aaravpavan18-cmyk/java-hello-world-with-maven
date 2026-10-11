@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define your Docker registry credentials ID (configured in Jenkins Credentials)
+        NEXUS_CREDS = credentials('nexus')
+        
+        // Define your image repository name
+        IMAGE_NAME = 'my-app/jb-hello-world'
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+    }
+
+    parameters {
+        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
+    }
+
+    stages {
+        stage('Fetch Artifact') {
+            steps {
+                script {
+                    def targetSelector
+                    
+                    if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
+                        targetSelector = lastSuccessful()
+                    } else {
+                        targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
+                    }
+                    
+                    // Copies the archived JAR from the upstream workspace
+                    copyArtifacts(
+                        projectName: 'build-java-maven',
+                        selector: targetSelector,
+                        filter: 'target/*.jar',
+                        fingerprintArtifacts: true
+                    )
+                }    
+            }
+        }
+        stage('Checkout Source') {
+            steps {
+                checkout([
+                    $class: 'GitSCM', 
+                    branches: [[name: '*/master']], 
+                    extensions: [], 
+                    userRemoteConfigs: [[
+                        credentialsId: 'gitpat', 
+                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Docker Build image') {
+            steps {
+                    // Build the Docker image using the Dockerfile in the root workspace
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."                    
+                    // Clean up local images to save Jenkins agent disk space
+                    //sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
+                }
+        }
+    }
+}
