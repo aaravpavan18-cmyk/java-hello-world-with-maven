@@ -98,5 +98,4 @@ pipeline {
                 echo "Artifact successfully published to Nexus via Jenkins Plugin!"
             }
         }
-    }
 }
