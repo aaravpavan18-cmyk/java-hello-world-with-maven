@@ -3,30 +3,60 @@ pipeline {
         label 'sshagent'
     }
 
+    // Requirement 2: Auto-triggers whenever the upstream job 'build-java-maven' finishes successfully
+    triggers {
+        upstream(upstreamProjects: 'build-java-maven', threshold: hudson.model.Result.SUCCESS)
+    }
+
     environment {
         NEXUS_CREDS = credentials('nexus')
-        // Global holders to safely pass dynamically resolved values between stages
-        TARGET_FILE_PATH = ''
-        DYNAMIC_VERSION  = ''
+        // Global variables to transfer data between stages dynamically
+        TARGET_FILE_PATH     = ''
+        UPSTREAM_RUN_NUMBER  = ''
     }
 
     parameters {
-        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
-        string(name: 'IMAGE_TAG', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
+        // Requirement 3: Manual trigger fallback option via build parameters
+        string(name: 'MANUAL_UPSTREAM_BUILD', defaultValue: 'LAST_SUCCESSFUL', description: 'Used ONLY for manual runs. Enter a specific build number or leave as LAST_SUCCESSFUL.')
     }
 
     stages {
+        stage('Resolve Upstream Build Context') {
+            steps {
+                script {
+                    // Requirement 5: Dynamically detects whether the job was triggered automatically or manually
+                    def upstreamCause = currentBuild.rawBuild.getCause(hudson.model.Cause$UpstreamCause)
+                    
+                    if (upstreamCause != null) {
+                        // Auto-triggered run: Extract the live build number from the upstream cause
+                        env.UPSTREAM_RUN_NUMBER = upstreamCause.getUpstreamBuild().toString()
+                        echo "Pipeline auto-triggered by upstream job 'build-java-maven' build #${env.UPSTREAM_RUN_NUMBER}"
+                    } else {
+                        // Manual run: Fall back to the user parameter input
+                        if (params.MANUAL_UPSTREAM_BUILD == 'LAST_SUCCESSFUL') {
+                            // Find the actual build number of the last successful job to use as a tag identifier
+                            def upstreamJob = Jenkins.get().getItemByFullName('build-java-maven')
+                            def lastSuccess = upstreamJob.getLastSuccessfulBuild()
+                            if (lastSuccess == null) {
+                                error "No successful upstream builds found for 'build-java-maven'!"
+                            }
+                            env.UPSTREAM_RUN_NUMBER = lastSuccess.getNumber().toString()
+                            echo "Manual execution using LAST_SUCCESSFUL upstream build: #${env.UPSTREAM_RUN_NUMBER}"
+                        } else {
+                            env.UPSTREAM_RUN_NUMBER = params.MANUAL_UPSTREAM_BUILD
+                            echo "Manual execution targeting specific upstream build: #${env.UPSTREAM_RUN_NUMBER}"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Fetch Artifact') {
             steps {
                 script {
-                    def targetSelector
-                    if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
-                        targetSelector = lastSuccessful()
-                    } else {
-                        targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
-                    }
+                    // Requirement 1: Downloads the specific artifact from the resolved upstream build number
+                    def targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
                     
-                    // Copies the archived JAR from the upstream workspace
                     copyArtifacts(
                         projectName: 'build-java-maven',
                         selector: targetSelector,
@@ -54,26 +84,21 @@ pipeline {
         stage('Docker Build image') {
             steps {
                 script {
-                    // 1. Locate the exact copied JAR file in the target directory dynamically
                     def jarFiles = findFiles(glob: 'target/*.jar')
-                    
                     if (jarFiles.length == 0) {
                         error "No JAR file found in target directory! Verify the upstream job archived it successfully."
                     }
-                    
-                    // Save values directly to global environment scope so the next stage can see them
                     env.TARGET_FILE_PATH = jarFiles[0].path
-                    env.DYNAMIC_VERSION  = (params.IMAGE_TAG == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
-                
-                    // Build the Docker image using the Dockerfile in the root workspace
-                    sh "docker build -t SUMAN-JAVA:${env.DYNAMIC_VERSION} ."                    
+                    
+                    // Requirement 4 & 5: Build image dynamically using the upstream run number as the tag
+                    // Pass the run number into the Dockerfile as an ARG environment metric
+                    sh "docker build --build-arg APP_VERSION=${env.UPSTREAM_RUN_NUMBER} -t SUMAN-JAVA:${env.UPSTREAM_RUN_NUMBER} ."                    
                 }
             }
         }
         
         stage('Publish to Nexus via Plugin') {
             steps {
-                // Fixed: The entire logic block, including echo, is now securely encapsulated inside the steps scope
                 script {
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
@@ -82,7 +107,7 @@ pipeline {
                         repository: 'maven-releases', 
                         credentialsId: 'nexus',
                         groupId: 'org.springframework',
-                        version: "${env.DYNAMIC_VERSION}", 
+                        version: "${env.UPSTREAM_RUN_NUMBER}", 
                         artifacts: [
                             [
                                 artifactId: 'jb-hello-world-maven',
