@@ -2,11 +2,15 @@
 FROM azul-zulu:21-jre-alpine
 RUN mkdir -p /app
 
+# Requirement 5: Declare the build argument to receive the upstream build number passed from Jenkins
+ARG APP_VERSION=unknown
+# Persist the value as an environment variable so your Java application can read it at runtime
+ENV DEPLOYED_VERSION=${APP_VERSION}
+
 # Step 2: Set a secure, dedicated execution directory inside the container
 WORKDIR /app
 
 # Step 3: Copy the fat JAR compiled by your Maven Shade stage into the container
-# This automatically catches 'jb-hello-world-maven-0.2.0.jar' and renames it cleanly
 COPY target/*.jar app.jar
 
 # Step 4: Define the container execution command to run your hello.HelloWorld application

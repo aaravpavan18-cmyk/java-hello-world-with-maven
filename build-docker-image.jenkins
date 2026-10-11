@@ -25,28 +25,25 @@ pipeline {
         stage('Resolve Upstream Build Context') {
             steps {
                 script {
-                    // Safe verification block for Upstream Automation
-                    def isUpstreamTriggered = false
-                    try {
-                        if (currentBuild.upstreamBuilds && currentBuild.upstreamBuilds.size() > 0) {
-                            env.UPSTREAM_RUN_NUMBER = currentBuild.upstreamBuilds[0].number.toString()
-                            isUpstreamTriggered = true
-                            echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
+                    // Requirement 5: Safely read the environment runtime cause list to check for auto-triggers
+                    def causes = currentBuild.rawBuild.getCauses()
+                    def isAutoTriggered = false
+                    
+                    for (cause in causes) {
+                        if (cause.class.toString().contains("UpstreamCause")) {
+                            env.UPSTREAM_RUN_NUMBER = cause.getUpstreamBuild().toString()
+                            isAutoTriggered = true
+                            break
                         }
-                    } catch (Exception e) {
-                        echo "Upstream context check bypassed (Normal behavior for manual pipeline initializations)."
                     }
                     
-                    // Manual fallbacks if no active upstream automation event is found
-                    if (!isUpstreamTriggered) {
-                        if (params.MANUAL_UPSTREAM_BUILD == 'LAST_SUCCESSFUL') {
-                            env.UPSTREAM_RUN_NUMBER = 'LAST_SUCCESSFUL'
-                            echo "Manual execution set to target the LAST_SUCCESSFUL upstream build."
-                        } else {
-                            // Ensure the parameter is stripped of any accidental whitespace
-                            env.UPSTREAM_RUN_NUMBER = params.MANUAL_UPSTREAM_BUILD.trim()
-                            echo "Manual execution targeting specific upstream build: #${env.UPSTREAM_RUN_NUMBER}"
-                        }
+                    if (isAutoTriggered) {
+                        echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
+                    } else {
+                        // Manual run: Safely pick up your manual entry parameters
+                        def inputVal = params.MANUAL_UPSTREAM_BUILD ? params.MANUAL_UPSTREAM_BUILD.trim() : 'LAST_SUCCESSFUL'
+                        env.UPSTREAM_RUN_NUMBER = inputVal
+                        echo "Manual execution handling resolved value: ${env.UPSTREAM_RUN_NUMBER}"
                     }
                 }
             }
@@ -55,18 +52,19 @@ pipeline {
         stage('Fetch Artifact') {
             steps {
                 script {
-                    // Requirement 1 & 3: Configure selectors dynamically without breaking on null metrics
-                    def targetSelector
+                    // Requirement 1 & 3: Dynamically structure the selector object using the clean string API.
+                    // This perfectly bypasses the need for calling unsafe .toInteger() methods.
+                    def selectorExpression = ""
+                    
                     if (env.UPSTREAM_RUN_NUMBER == 'LAST_SUCCESSFUL' || env.UPSTREAM_RUN_NUMBER == '') {
-                        targetSelector = lastSuccessful()
+                        selectorExpression = "<lastSuccessful/>"
                     } else {
-                        // Safe conversion now that env.UPSTREAM_RUN_NUMBER is guaranteed to be a valid numeric string
-                        targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
+                        selectorExpression = "<specific buildNumber='${env.UPSTREAM_RUN_NUMBER}'/>"
                     }
                     
                     copyArtifacts(
                         projectName: 'build-java-maven',
-                        selector: targetSelector,
+                        selector: buildSelector(selectorExpression),
                         filter: 'target/*.jar',
                         fingerprintArtifacts: true
                     )
@@ -97,8 +95,8 @@ pipeline {
                     }
                     env.TARGET_FILE_PATH = jarFiles[0].path
                     
-                    // Requirement 4 & 5: Format the tag properly. If 'LAST_SUCCESSFUL' was evaluated,
-                    // we stamp it with the current downstream build sequence so Docker receives a valid tag.
+                    // Requirement 4 & 5: Build out tag constraints. If 'LAST_SUCCESSFUL' is configured, 
+                    // fall back to the current downstream run sequence so Docker receives a valid tag format.
                     def finalDockerTag = env.UPSTREAM_RUN_NUMBER
                     if (finalDockerTag == 'LAST_SUCCESSFUL' || finalDockerTag == '') {
                         finalDockerTag = "${env.BUILD_NUMBER}"
@@ -106,7 +104,7 @@ pipeline {
                     
                     env.RESOLVED_TAG = finalDockerTag
                     
-                    // Build image dynamically and inject the tag context straight into the Dockerfile ARG
+                    // Build image dynamically and pass version into Dockerfile ARG
                     sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t SUMAN-JAVA:${env.RESOLVED_TAG} ."                    
                 }
             }
