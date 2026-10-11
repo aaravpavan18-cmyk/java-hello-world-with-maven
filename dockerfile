@@ -1,5 +1,6 @@
 # Step 1: Use an official, lightweight Java 21 JRE runtime environment based on Alpine Linux
-FROM eclipse-temurin:21-jre-alpine
+FROM azul-zulu:21-jre-alpine
+RUN mkdir -p /app
 
 # Step 2: Set a secure, dedicated execution directory inside the container
 WORKDIR /app
