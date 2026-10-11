@@ -13,6 +13,7 @@ pipeline {
         // Global variables to transfer data between stages dynamically
         TARGET_FILE_PATH     = ''
         UPSTREAM_RUN_NUMBER  = ''
+        RESOLVED_TAG         = ''
     }
 
     parameters {
@@ -24,20 +25,26 @@ pipeline {
         stage('Resolve Upstream Build Context') {
             steps {
                 script {
-                    // Requirement 5: Sandbox-safe method to detect upstream automation
-                    def upstreamBuilds = currentBuild.upstreamBuilds
+                    // Safe verification block for Upstream Automation
+                    def isUpstreamTriggered = false
+                    try {
+                        if (currentBuild.upstreamBuilds && currentBuild.upstreamBuilds.size() > 0) {
+                            env.UPSTREAM_RUN_NUMBER = currentBuild.upstreamBuilds[0].number.toString()
+                            isUpstreamTriggered = true
+                            echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
+                        }
+                    } catch (Exception e) {
+                        echo "Upstream context check bypassed (Normal behavior for manual pipeline initializations)."
+                    }
                     
-                    if (upstreamBuilds && upstreamBuilds.size() > 0) {
-                        // Auto-triggered run: Safely grab the build number from Jenkins environment array
-                        env.UPSTREAM_RUN_NUMBER = upstreamBuilds[0].number.toString()
-                        echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
-                    } else {
-                        // Manual run: Process the parameter inputs
+                    // Manual fallbacks if no active upstream automation event is found
+                    if (!isUpstreamTriggered) {
                         if (params.MANUAL_UPSTREAM_BUILD == 'LAST_SUCCESSFUL') {
                             env.UPSTREAM_RUN_NUMBER = 'LAST_SUCCESSFUL'
                             echo "Manual execution set to target the LAST_SUCCESSFUL upstream build."
                         } else {
-                            env.UPSTREAM_RUN_NUMBER = params.MANUAL_UPSTREAM_BUILD
+                            // Ensure the parameter is stripped of any accidental whitespace
+                            env.UPSTREAM_RUN_NUMBER = params.MANUAL_UPSTREAM_BUILD.trim()
                             echo "Manual execution targeting specific upstream build: #${env.UPSTREAM_RUN_NUMBER}"
                         }
                     }
@@ -48,11 +55,12 @@ pipeline {
         stage('Fetch Artifact') {
             steps {
                 script {
-                    // Requirement 1 & 3: Configure selectors dynamically based on sandbox-friendly input
+                    // Requirement 1 & 3: Configure selectors dynamically without breaking on null metrics
                     def targetSelector
-                    if (env.UPSTREAM_RUN_NUMBER == 'LAST_SUCCESSFUL') {
+                    if (env.UPSTREAM_RUN_NUMBER == 'LAST_SUCCESSFUL' || env.UPSTREAM_RUN_NUMBER == '') {
                         targetSelector = lastSuccessful()
                     } else {
+                        // Safe conversion now that env.UPSTREAM_RUN_NUMBER is guaranteed to be a valid numeric string
                         targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
                     }
                     
@@ -89,18 +97,17 @@ pipeline {
                     }
                     env.TARGET_FILE_PATH = jarFiles[0].path
                     
-                    // If the user triggered the job manually with 'LAST_SUCCESSFUL', we query the local file path 
-                    // or fallback to the current downstream BUILD_NUMBER so that the Docker image tag is a valid number string
+                    // Requirement 4 & 5: Format the tag properly. If 'LAST_SUCCESSFUL' was evaluated,
+                    // we stamp it with the current downstream build sequence so Docker receives a valid tag.
                     def finalDockerTag = env.UPSTREAM_RUN_NUMBER
-                    if (finalDockerTag == 'LAST_SUCCESSFUL') {
+                    if (finalDockerTag == 'LAST_SUCCESSFUL' || finalDockerTag == '') {
                         finalDockerTag = "${env.BUILD_NUMBER}"
                     }
                     
-                    // Requirement 4 & 5: Build image dynamically and pass version into Dockerfile
-                    sh "docker build --build-arg APP_VERSION=${finalDockerTag} -t SUMAN-JAVA:${finalDockerTag} ."                    
-                    
-                    // Expose tag globally for the Nexus publication phase
                     env.RESOLVED_TAG = finalDockerTag
+                    
+                    // Build image dynamically and inject the tag context straight into the Dockerfile ARG
+                    sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t SUMAN-JAVA:${env.RESOLVED_TAG} ."                    
                 }
             }
         }
