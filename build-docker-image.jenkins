@@ -3,7 +3,7 @@ pipeline {
         label 'sshagent'
     }
 
-    // Requirement 2: Auto-triggers whenever the upstream job 'build-java-maven' finishes successfully
+    // Requirement 2: Auto-triggers whenever the upstream job finishes successfully
     triggers {
         upstream(upstreamProjects: 'build-java-maven', threshold: hudson.model.Result.SUCCESS)
     }
@@ -24,24 +24,18 @@ pipeline {
         stage('Resolve Upstream Build Context') {
             steps {
                 script {
-                    // Requirement 5: Dynamically detects whether the job was triggered automatically or manually
-                    def upstreamCause = currentBuild.rawBuild.getCause(hudson.model.Cause$UpstreamCause)
+                    // Requirement 5: Sandbox-safe method to detect upstream automation
+                    def upstreamBuilds = currentBuild.upstreamBuilds
                     
-                    if (upstreamCause != null) {
-                        // Auto-triggered run: Extract the live build number from the upstream cause
-                        env.UPSTREAM_RUN_NUMBER = upstreamCause.getUpstreamBuild().toString()
-                        echo "Pipeline auto-triggered by upstream job 'build-java-maven' build #${env.UPSTREAM_RUN_NUMBER}"
+                    if (upstreamBuilds && upstreamBuilds.size() > 0) {
+                        // Auto-triggered run: Safely grab the build number from Jenkins environment array
+                        env.UPSTREAM_RUN_NUMBER = upstreamBuilds[0].number.toString()
+                        echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
                     } else {
-                        // Manual run: Fall back to the user parameter input
+                        // Manual run: Process the parameter inputs
                         if (params.MANUAL_UPSTREAM_BUILD == 'LAST_SUCCESSFUL') {
-                            // Find the actual build number of the last successful job to use as a tag identifier
-                            def upstreamJob = Jenkins.get().getItemByFullName('build-java-maven')
-                            def lastSuccess = upstreamJob.getLastSuccessfulBuild()
-                            if (lastSuccess == null) {
-                                error "No successful upstream builds found for 'build-java-maven'!"
-                            }
-                            env.UPSTREAM_RUN_NUMBER = lastSuccess.getNumber().toString()
-                            echo "Manual execution using LAST_SUCCESSFUL upstream build: #${env.UPSTREAM_RUN_NUMBER}"
+                            env.UPSTREAM_RUN_NUMBER = 'LAST_SUCCESSFUL'
+                            echo "Manual execution set to target the LAST_SUCCESSFUL upstream build."
                         } else {
                             env.UPSTREAM_RUN_NUMBER = params.MANUAL_UPSTREAM_BUILD
                             echo "Manual execution targeting specific upstream build: #${env.UPSTREAM_RUN_NUMBER}"
@@ -54,8 +48,13 @@ pipeline {
         stage('Fetch Artifact') {
             steps {
                 script {
-                    // Requirement 1: Downloads the specific artifact from the resolved upstream build number
-                    def targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
+                    // Requirement 1 & 3: Configure selectors dynamically based on sandbox-friendly input
+                    def targetSelector
+                    if (env.UPSTREAM_RUN_NUMBER == 'LAST_SUCCESSFUL') {
+                        targetSelector = lastSuccessful()
+                    } else {
+                        targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
+                    }
                     
                     copyArtifacts(
                         projectName: 'build-java-maven',
@@ -75,7 +74,7 @@ pipeline {
                     extensions: [], 
                     userRemoteConfigs: [[
                         credentialsId: 'gitpat', 
-                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
+                        url: 'https://github.com'
                     ]]
                 ])
             }
@@ -90,9 +89,18 @@ pipeline {
                     }
                     env.TARGET_FILE_PATH = jarFiles[0].path
                     
-                    // Requirement 4 & 5: Build image dynamically using the upstream run number as the tag
-                    // Pass the run number into the Dockerfile as an ARG environment metric
-                    sh "docker build --build-arg APP_VERSION=${env.UPSTREAM_RUN_NUMBER} -t SUMAN-JAVA:${env.UPSTREAM_RUN_NUMBER} ."                    
+                    // If the user triggered the job manually with 'LAST_SUCCESSFUL', we query the local file path 
+                    // or fallback to the current downstream BUILD_NUMBER so that the Docker image tag is a valid number string
+                    def finalDockerTag = env.UPSTREAM_RUN_NUMBER
+                    if (finalDockerTag == 'LAST_SUCCESSFUL') {
+                        finalDockerTag = "${env.BUILD_NUMBER}"
+                    }
+                    
+                    // Requirement 4 & 5: Build image dynamically and pass version into Dockerfile
+                    sh "docker build --build-arg APP_VERSION=${finalDockerTag} -t SUMAN-JAVA:${finalDockerTag} ."                    
+                    
+                    // Expose tag globally for the Nexus publication phase
+                    env.RESOLVED_TAG = finalDockerTag
                 }
             }
         }
@@ -107,7 +115,7 @@ pipeline {
                         repository: 'maven-releases', 
                         credentialsId: 'nexus',
                         groupId: 'org.springframework',
-                        version: "${env.UPSTREAM_RUN_NUMBER}", 
+                        version: "${env.RESOLVED_TAG}", 
                         artifacts: [
                             [
                                 artifactId: 'jb-hello-world-maven',
