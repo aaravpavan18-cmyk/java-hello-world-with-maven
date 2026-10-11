@@ -1,17 +1,17 @@
 pipeline {
-    agent any
+    agent {
+        label 'sshagent'
+    }
 
     environment {
         // Define your Docker registry credentials ID (configured in Jenkins Credentials)
         NEXUS_CREDS = credentials('nexus')
         
-        // Define your image repository name
-        IMAGE_NAME = 'my-app/jb-hello-world'
-        IMAGE_TAG  = "${BUILD_NUMBER}"
     }
 
     parameters {
         string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
+        string(name: 'IMAGE_TAG', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
     }
 
     stages {
@@ -52,11 +52,51 @@ pipeline {
 
         stage('Docker Build image') {
             steps {
+                script {
+                    // 1. Locate the exact copied JAR file in the target directory dynamically using a wildcard match
+                    def jarFiles = findFiles(glob: 'target/*.jar')
+                    
+                    if (jarFiles.length == 0) {
+                        error "No JAR file found in target directory! Verify the upstream job archived it successfully."
+                    }
+                    
+                    // Pull the exact filename out of the array context path (e.g. 'target/jb-hello-world-maven-23.jar')
+                    def targetFilePath = jarFiles[0].path
+                    
+                    // 2. Resolve the dynamic version tracking number for Nexus indexing metadata
+                    def dynamicVersion = (params.IMAGE_TAG == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
+                
                     // Build the Docker image using the Dockerfile in the root workspace
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."                    
+                    sh "docker build -t SUMAN-JAVA:${dynamicVersion} ."                    
                     // Clean up local images to save Jenkins agent disk space
                     //sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
+            }
+        }
+        stage('Publish to Nexus via Plugin') {
+            steps {
+                
+                    // 3. Execute authorized push directly to the hosted production repository layout
+                    nexusArtifactUploader(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: '10.253.41.229:8081',
+                        repository: 'maven-releases', // Target hosted repository group block bypassed
+                        credentialsId: 'nexus',
+                        groupId: 'org.springframework',
+                        version: "${dynamicVersion}", // String interpolation active via double quotes
+                        artifacts: [
+                            [
+                                artifactId: 'jb-hello-world-maven',
+                                classifier: '',
+                                file: "${targetFilePath}", // Dynamically points to the resolved file location
+                                type: 'jar'
+                            ]
+                        ]
+                    )
+                }
+                echo "Artifact successfully published to Nexus via Jenkins Plugin!"
+            }
         }
     }
 }

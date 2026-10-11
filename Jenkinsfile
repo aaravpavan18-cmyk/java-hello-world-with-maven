@@ -69,10 +69,18 @@ pipeline {
             }
         }
 
-        stage('Trigger Upload') {
+        stage('Trigger upload-maven-artifacts') {
             steps {
                 // Trigger the downstream job and pass the current build number
                 build job: 'upload-maven-artifacts', parameters: [
+                    string(name: 'UPSTREAM_BUILD_NUMBER', value: "${BUILD_NUMBER}")
+                ]
+            }
+        }
+        stage('Trigger build-docker-image-upload-nexus') {
+            steps {
+                // Trigger the downstream job and pass the current build number
+                build job: 'build-docker-image-upload-nexus', parameters: [
                     string(name: 'UPSTREAM_BUILD_NUMBER', value: "${BUILD_NUMBER}")
                 ]
             }
