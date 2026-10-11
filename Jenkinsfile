@@ -52,9 +52,12 @@ pipeline {
 
         stage('Package Artifact') {
             steps {
-                sh 'mvn package -DskipTests'
+                // 🌟 Inject the Jenkins build number directly into the Maven execution context
+                //sh "mvn clean package -DskipTests -Drevision=0.2.0-${env.BUILD_NUMBER}"
+                //sh 'mvn package -DskipTests'
+                sh 'mvn clean package -Dmaven.repo.local=.m2/repository'
                 sh "mv target/jb-hello-world-maven-0.2.0.jar target/jb-hello-world-maven-${env.BUILD_NUMBER}.jar"
-                //sh 'mvn clean package -Dmaven.repo.local=.m2/repository'
+                
             }
         }
 
