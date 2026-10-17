@@ -76,7 +76,7 @@ pipeline {
                     def dynamicVersion = (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
                     
                     echo "Before tag: ${dynamicVersion}"
-                    env.RESOLVED_TAG = "${dynamicVersion}"
+                    env.RESOLVED_TAG = dynamicVersion.toString()
                     echo "Tagged: ${env.RESOLVED_TAG}"
                     // Lowercase repository name to satisfy Docker's structural validation constraints
                     sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t suman-java:${env.RESOLVED_TAG} ."                    
