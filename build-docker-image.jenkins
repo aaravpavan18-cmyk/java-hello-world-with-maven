@@ -70,7 +70,6 @@ pipeline {
                         targetSelector = lastSuccessful()
                     } else {
                         echo "Targeting artifact pulling phase from specific build number: ${env.UPSTREAM_RUN_NUMBER}"
-                        // Safe conversion now that nulls and 'LAST_SUCCESSFUL' strings are completely filtered out
                         targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
                     }
                     
@@ -119,7 +118,7 @@ pipeline {
                     sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t suman-java:${env.RESOLVED_TAG} ."                    
                 }
             }
-        } black
+        } 
         
         stage('Publish to Nexus via Plugin') {
             steps {
