@@ -83,7 +83,7 @@ pipeline {
                     extensions: [], 
                     userRemoteConfigs: [[
                         credentialsId: 'gitpat', 
-                        url: 'https://github.com'
+                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
                     ]]
                 ])
             }

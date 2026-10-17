@@ -15,3 +15,4 @@ COPY target/*.jar app.jar
 
 # Step 4: Define the container execution command to run your hello.HelloWorld application
 ENTRYPOINT ["java", "-jar", "app.jar"]
+

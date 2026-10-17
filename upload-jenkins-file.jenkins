@@ -3,13 +3,19 @@ pipeline {
         label 'maven-docker'
     }
 
+    parameters {
+        // Define the externalised URL string parameter here
+        string(name: 'NEXUS_URL', 
+               defaultValue: '192.168.31.240:8081', 
+               description: 'Enter the target nexus artifactory URL')
+        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
+    }
+
     environment {
         NEXUS_CREDS = credentials('nexus')
     }
 
-    parameters {
-        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
-    }
+    
 
     stages {
         stage('Fetch Artifact') {
@@ -54,7 +60,7 @@ pipeline {
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
                         protocol: 'http',
-                        nexusUrl: '192.168.0.169:8081',
+                        nexusUrl: "${params.NEXUS_URL}",
                         repository: 'maven-releases', // Target hosted repository group block bypassed
                         credentialsId: 'nexus',
                         groupId: 'org.springframework',

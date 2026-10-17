@@ -3,6 +3,14 @@ pipeline {
         label 'maven-docker'
     }
 
+    parameters {
+        // Define the externalised URL string parameter here
+        string(name: 'GIT_REPO_URL', 
+               defaultValue: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git', 
+               description: 'Enter the target Git Repository URL')
+    }
+
+
     // 🌟 ADD THIS BLOCK TO YOUR UPSTREAM BUILD JOB 🌟
     options {
         // Replace 'upload-nexus-job' with the EXACT name of your current upload job
@@ -24,7 +32,7 @@ pipeline {
                     extensions: [], 
                     userRemoteConfigs: [[
                         credentialsId: 'gitpat', 
-                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
+                        url: "${params.GIT_REPO_URL}"
                     ]]
                 ])
             }
