@@ -11,7 +11,7 @@ ENV DEPLOYED_VERSION=${APP_VERSION}
 WORKDIR /app
 
 # Step 3: Copy the fat JAR compiled by your Maven Shade stage into the container
-COPY target/*.jar app.jar
+COPY target/*.jar /app/
 
 # Step 4: Define the container execution command to run your hello.HelloWorld application
 ENTRYPOINT ["java", "-jar", "app.jar"]
