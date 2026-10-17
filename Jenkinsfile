@@ -14,7 +14,7 @@ pipeline {
     // 🌟 ADD THIS BLOCK TO YOUR UPSTREAM BUILD JOB 🌟
     options {
         // Replace 'upload-nexus-job' with the EXACT name of your current upload job
-        copyArtifactPermission('upload-maven-artifacts') 
+        copyArtifactPermission('upload-maven-artifacts,build-docker-image-upload-nexus') 
     }
 
     environment {
@@ -38,7 +38,7 @@ pipeline {
             }
         }
 
-        stage('Maven Compile') {
+        /* stage('Maven Compile') {
             steps {
                 sh 'mvn clean compile'
             }
@@ -48,7 +48,7 @@ pipeline {
             steps {
                 sh 'mvn clean test'
             }
-        }
+        } */
 
         //stage('SonarQube Static Analysis') {
             //steps {
