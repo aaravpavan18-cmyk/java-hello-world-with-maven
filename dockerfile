@@ -14,5 +14,5 @@ WORKDIR /app
 COPY target/*.jar /app/
 
 # Step 4: Define the container execution command to run your hello.HelloWorld application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/jb-hello-world-maven-0.2.0.jar"]
 
