@@ -3,13 +3,12 @@ pipeline {
         label 'sshagent'
     }
 
-    // Requirement 2: Auto-triggers whenever the upstream job finishes successfully
+    // Auto-triggers whenever the upstream job finishes successfully
     triggers {
         upstream(upstreamProjects: 'build-java-maven', threshold: hudson.model.Result.SUCCESS)
     }
 
     environment {
-        // Securely pull credentials map from the Jenkins configuration backend
         NEXUS_CREDS = credentials('nexus')
         // Global storage variables to handle dynamic tracking context across different stages cleanly
         TARGET_FILE_PATH     = ''
@@ -18,24 +17,53 @@ pipeline {
     }
 
     parameters {
-        // Requirement 3: Manual trigger fallback option via build parameters
-        string(name: 'MANUAL_UPSTREAM_BUILD', defaultValue: 'LAST_SUCCESSFUL', description: 'Used ONLY for manual runs. Enter a specific build number or leave as LAST_SUCCESSFUL.')
+        // Aligned parameter naming schema perfectly
+        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Used for MANUAL runs only. Enter a specific build number or leave as LAST_SUCCESSFUL.')
     }
 
     stages {
+        stage('Resolve Upstream Build Context') {
+            steps {
+                script {
+                    // Sandbox-safe inspection using currentBuild.buildCauses to detect automated triggers
+                    def causes = currentBuild.buildCauses
+                    def isAutoTriggered = false
+                    
+                    for (cause in causes) {
+                        if (cause.toString().contains("UpstreamCause") || cause.shortDescription.contains("upstream project")) {
+                            if (cause.upstreamBuild) {
+                                env.UPSTREAM_RUN_NUMBER = cause.upstreamBuild.toString()
+                                isAutoTriggered = true
+                                break
+                            }
+                        }
+                    }
+                    
+                    if (isAutoTriggered) {
+                        echo "Pipeline auto-triggered by upstream job build #${env.UPSTREAM_RUN_NUMBER}"
+                    } else {
+                        // Manual run fallback path utilizing aligned parameters block
+                        def inputVal = params.UPSTREAM_BUILD_NUMBER ? params.UPSTREAM_BUILD_NUMBER.trim() : 'LAST_SUCCESSFUL'
+                        env.UPSTREAM_RUN_NUMBER = inputVal
+                        echo "Manual execution handling resolved value: ${env.UPSTREAM_RUN_NUMBER}"
+                    }
+                }
+            }
+        }
 
         stage('Fetch Artifact') {
             steps {
                 script {
                     def targetSelector
                     
-                    if (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') {
+                    if (env.UPSTREAM_RUN_NUMBER == 'LAST_SUCCESSFUL' || env.UPSTREAM_RUN_NUMBER == 'null' || env.UPSTREAM_RUN_NUMBER == '') {
+                        echo "Targeting artifact compilation from: LAST_SUCCESSFUL record copy"
                         targetSelector = lastSuccessful()
                     } else {
-                        targetSelector = specific(params.UPSTREAM_BUILD_NUMBER)
+                        echo "Targeting artifact compilation from specific build number: ${env.UPSTREAM_RUN_NUMBER}"
+                        targetSelector = specific(env.UPSTREAM_RUN_NUMBER.toInteger())
                     }
                     
-                    // Copies the archived JAR from the upstream workspace
                     copyArtifacts(
                         projectName: 'build-java-maven',
                         selector: targetSelector,
@@ -69,7 +97,7 @@ pipeline {
                     }
                     env.TARGET_FILE_PATH = jarFiles[0].path
                     
-                    // Requirement 4 & 5: Format docker tags to always yield a unique valid tag tracking number
+                    // Format docker tags to always yield a unique valid tag tracking number
                     def finalDockerTag = env.UPSTREAM_RUN_NUMBER
                     if (finalDockerTag == 'LAST_SUCCESSFUL' || finalDockerTag == 'null' || finalDockerTag == '') {
                         finalDockerTag = "${env.BUILD_NUMBER}"
@@ -77,8 +105,8 @@ pipeline {
                     
                     env.RESOLVED_TAG = finalDockerTag
                     
-                    // Build image dynamically and pass version into Dockerfile ARG block parameters
-                    sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t SUMAN-JAVA:${env.RESOLVED_TAG} ."                    
+                    // Fix: Repo name converted to lowercase "suman-java" to comply with core Docker naming limits
+                    sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t suman-java:${env.RESOLVED_TAG} ."                    
                 }
             }
         }
@@ -86,13 +114,11 @@ pipeline {
         stage('Publish to Nexus via Plugin') {
             steps {
                 script {
-                    // Explicit deployment safety configuration block to guarantee successful handshakes
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
                         protocol: 'http',
                         nexusUrl: '192.168.31.240:8081',
                         repository: 'maven-releases', 
-                        // Explicitly bind the credential user/pass tokens resolved from environment blocks
                         username: "${env.NEXUS_CREDS_USR}",
                         password: "${env.NEXUS_CREDS_PSW}",
                         groupId: 'org.springframework',
