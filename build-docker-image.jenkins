@@ -70,7 +70,7 @@ pipeline {
                     env.TARGET_FILE_PATH = jarFiles[0].path
                     
                     // Requirement 4 & 5: Format docker tags to always yield a unique valid tag tracking number
-                    //def finalDockerTag = env.UPSTREAM_RUN_NUMBER
+                    def finalDockerTag = specific(params.UPSTREAM_BUILD_NUMBER)
                     if (finalDockerTag == 'LAST_SUCCESSFUL' || finalDockerTag == 'null' || finalDockerTag == '') {
                         finalDockerTag = "${env.BUILD_NUMBER}"
                     }
