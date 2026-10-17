@@ -64,18 +64,19 @@ pipeline {
             steps {
                 script {
                     def jarFiles = findFiles(glob: 'target/*.jar')
+                    
                     if (jarFiles.length == 0) {
                         error "No JAR file found in target directory! Verify the upstream job archived it successfully."
                     }
-                    env.TARGET_FILE_PATH = jarFiles[0].path
                     
-                    // Requirement 4 & 5: Format docker tags to always yield a unique valid tag tracking number
-                    def finalDockerTag = specific(params.UPSTREAM_BUILD_NUMBER)
-                    if (finalDockerTag == 'LAST_SUCCESSFUL' || finalDockerTag == 'null' || finalDockerTag == '') {
-                        finalDockerTag = "${env.BUILD_NUMBER}"
-                    }
+                    // Pull the exact filename out of the array context path (e.g. 'target/jb-hello-world-maven-23.jar')
+                    def targetFilePath = jarFiles[0].path
                     
-                    env.RESOLVED_TAG = finalDockerTag
+                    // 2. Resolve the dynamic version tracking number for Nexus indexing metadata
+                    def dynamicVersion = (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
+                    
+                    
+                    env.RESOLVED_TAG = dynamicVersion
                     
                     // Lowercase repository name to satisfy Docker's structural validation constraints
                     sh "docker build --build-arg APP_VERSION=${env.RESOLVED_TAG} -t suman-java:${env.RESOLVED_TAG} ."                    
