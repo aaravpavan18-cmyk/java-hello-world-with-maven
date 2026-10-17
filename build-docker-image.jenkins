@@ -1,3 +1,4 @@
+RESOLVED_TAG         = ''
 pipeline {
     agent {
         label 'sshagent'
@@ -14,7 +15,7 @@ pipeline {
         // Global storage variables to handle dynamic tracking context across different stages cleanly
         TARGET_FILE_PATH     = ''
         UPSTREAM_RUN_NUMBER  = ''
-        RESOLVED_TAG         = ''
+        
     }
 
     parameters {
