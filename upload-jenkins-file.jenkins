@@ -8,6 +8,9 @@ pipeline {
         string(name: 'NEXUS_URL', 
                defaultValue: '192.168.31.240:8081', 
                description: 'Enter the target nexus artifactory URL')
+        choice(name: 'NEXUS_PROTOCOL', 
+               choices: ['http', 'https'], 
+               description: 'Select protocol for Nexus connection')
         string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Enter the upstream build number to retry, or leave as LAST_SUCCESSFUL')
     }
 
@@ -59,7 +62,7 @@ pipeline {
                     // 3. Execute authorized push directly to the hosted production repository layout
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
-                        protocol: 'http',
+                        protocol: "${params.NEXUS_PROTOCOL}",
                         nexusUrl: "${params.NEXUS_URL}",
                         repository: 'maven-releases', // Target hosted repository group block bypassed
                         credentialsId: 'nexus',

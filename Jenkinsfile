@@ -4,7 +4,7 @@ pipeline {
     }
 
     parameters {
-        // Define the externalised URL string parameter here
+        // Define the externalised URL string parameter here.
         string(name: 'GIT_REPO_URL', 
                defaultValue: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git', 
                description: 'Enter the target Git Repository URL')
