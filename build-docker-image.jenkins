@@ -19,12 +19,21 @@ pipeline {
     }
 
     parameters {
+        string(name: 'GIT_REPO_URL', 
+               defaultValue: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git', 
+               description: 'Enter the target Git Repository URL')
+        // Define the externalised URL string parameter here
+        string(name: 'NEXUS_URL', 
+               defaultValue: '192.168.31.240:8081', 
+               description: 'Enter the target nexus artifactory URL')
+        // Define the externalised URL string parameter here
+        choice(name: 'NEXUS_PROTOCOL', 
+               choices: ['http', 'https'], 
+               description: 'Select protocol for Nexus connection')
         string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'LAST_SUCCESSFUL', description: 'Used for MANUAL runs only. Enter a specific build number or leave as LAST_SUCCESSFUL.')
     }
 
-    stages {
-        
-
+    stages {    
         stage('Fetch Artifact') {
             steps {
                 script {
@@ -55,7 +64,7 @@ pipeline {
                     extensions: [], 
                     userRemoteConfigs: [[
                         credentialsId: 'gitpat', 
-                        url: 'https://github.com/aaravpavan18-cmyk/java-hello-world-with-maven.git'
+                        url: "${params.GIT_REPO_URL}"
                     ]]
                 ])
             }
@@ -90,11 +99,10 @@ pipeline {
                 script {
                     nexusArtifactUploader(
                         nexusVersion: 'nexus3',
-                        protocol: 'http',
-                        nexusUrl: '192.168.31.240:8081',
+                        protocol: "${params.NEXUS_PROTOCOL}",
+                        nexusUrl: "${params.NEXUS_URL}",
                         repository: 'maven-releases', 
-                        username: "${env.NEXUS_CREDS_USR}",
-                        password: "${env.NEXUS_CREDS_PSW}",
+                        credentialsId: 'nexus',
                         groupId: 'org.springframework',
                         version: "${env.RESOLVED_TAG}", 
                         artifacts: [
