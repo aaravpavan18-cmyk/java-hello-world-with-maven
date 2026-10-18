@@ -1,4 +1,5 @@
-RESOLVED_TAG         = ''
+def RESOLVED_TAG         = ''
+def TARGET_FILE_PATH     = ''
 pipeline {
     agent {
         label 'sshagent'
@@ -13,7 +14,7 @@ pipeline {
         // Securely pull credentials map from the Jenkins configuration backend
         NEXUS_CREDS = credentials('nexus')
         // Global storage variables to handle dynamic tracking context across different stages cleanly
-        TARGET_FILE_PATH     = ''
+        
         UPSTREAM_RUN_NUMBER  = ''
         
     }
@@ -81,6 +82,9 @@ pipeline {
                     
                     // Pull the exact filename out of the array context path (e.g. 'target/jb-hello-world-maven-23.jar')
                     def targetFilePath = jarFiles[0].path
+                    echo "Before file tag: ${targetFilePath}"
+                    env.TARGET_FILE_PATH = targetFilePath
+                    echo "File Tagged: ${env.TARGET_FILE_PATH}"
                     
                     // 2. Resolve the dynamic version tracking number for Nexus indexing metadata
                     def dynamicVersion = (params.UPSTREAM_BUILD_NUMBER == 'LAST_SUCCESSFUL') ? "${env.BUILD_NUMBER}" : "${params.UPSTREAM_BUILD_NUMBER}"
